@@ -5,6 +5,8 @@ on:
     branches:
       - main
       - 'arena/**'
+    tags:
+      - 'v*'
   workflow_dispatch:
     inputs:
       release_tag:
@@ -83,8 +85,13 @@ jobs:
       - name: Determine tag
         id: tag
         run: |
-          if [ -n "${{ inputs.release_tag }}" ]; then
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG=${GITHUB_REF#refs/tags/}
+            echo "tag=$TAG" >> $GITHUB_OUTPUT
+            echo "Using tag from ref: $TAG"
+          elif [ -n "${{ inputs.release_tag }}" ]; then
             echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
+            echo "Using input tag: ${{ inputs.release_tag }}"
           else
             # read version from pubspec.yaml correctly
             VER=$(grep '^version:' pubspec.yaml | sed -E 's/version:[[:space:]]*//' | cut -d'+' -f1 | tr -d ' ' | tr -d "'\"")
