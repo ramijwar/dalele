@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Tag for release (e.g. v1.0.0)'
+        description: 'Tag for release (e.g. v1.1.0)'
         required: false
         default: ''
       create_release:
@@ -57,28 +57,49 @@ jobs:
       - name: Run tests
         run: flutter test || true
 
-      - name: Build APK release
-        run: flutter build apk --release -v
+      # ── بناء APK العادي (universal) ──
+      - name: Build APK universal release
+        run: flutter build apk --release --verbose
 
-      - name: Prepare artifacts
+      # ── بناء APK مقسمة حسب المعمارية (أصغر حجماً) ──
+      - name: Build APK split per ABI (arm64, armv7, x64)
+        run: flutter build apk --release --split-per-abi --verbose
+
+      # ── بناء نسخة 64-bit فقط (أصغر حجم ممكن) ──
+      - name: Build APK arm64-v8a only (64-bit smallest)
+        run: flutter build apk --release --target-platform android-arm64 --verbose
+
+      - name: Prepare artifacts & list sizes
         run: |
+          echo "=== APKs built ==="
           ls -lh build/app/outputs/flutter-apk/
+          echo ""
           mkdir -p dist
-          cp build/app/outputs/flutter-apk/app-release.apk dist/dalel-release.apk
-          # copy with Arabic name if filesystem supports
+          # نسخ كل الـ APKs إلى dist
+          cp build/app/outputs/flutter-apk/*.apk dist/ || true
+          ls -lh dist/
+          echo ""
+          echo "=== Sizes ==="
+          du -h dist/*.apk
+          # نسخ مع أسماء عربية ومبسطة
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/dalel-arm64.apk || true
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "dist/دليل-الدير-arm64.apk" || true
+          cp build/app/outputs/flutter-apk/app-release.apk dist/dalel-release.apk || true
           cp build/app/outputs/flutter-apk/app-release.apk "dist/دليل-الدير.apk" || true
-          # also copy version info
+          # معلومات البناء
           echo "Build: ${{ github.run_number }}" > dist/build-info.txt
           echo "Commit: ${{ github.sha }}" >> dist/build-info.txt
           echo "Date: $(date -u)" >> dist/build-info.txt
+          echo "Version: $(grep '^version:' pubspec.yaml)" >> dist/build-info.txt
+          cat dist/build-info.txt
           ls -lh dist/
 
-      - name: Upload APK artifact
+      - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: dalel-apk-${{ github.run_number }}
           path: |
-            build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/*.apk
             dist/
           retention-days: 30
 
@@ -93,47 +114,64 @@ jobs:
             echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
             echo "Using input tag: ${{ inputs.release_tag }}"
           else
-            # read version from pubspec.yaml correctly
             VER=$(grep '^version:' pubspec.yaml | sed -E 's/version:[[:space:]]*//' | cut -d'+' -f1 | tr -d ' ' | tr -d "'\"")
-            if [ -z "$VER" ]; then VER="1.0.0"; fi
+            if [ -z "$VER" ]; then VER="1.1.0"; fi
             echo "VER=$VER"
             echo "tag=v${VER}-${{ github.run_number }}" >> $GITHUB_OUTPUT
           fi
           echo "Tag determined"
 
-      - name: Create GitHub Release with APK
+      - name: Create GitHub Release with APKs (universal + arm64)
         if: ${{ inputs.create_release != 'false' }}
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: "دليل الدير ${{ steps.tag.outputs.tag }}"
           body: |
-            ## دليل الدير - APK جاهز للتثبيت
-            
-            تم بناء هذا الإصدار تلقائياً عبر GitHub Actions.
-            
+            ## دليل الدير - APK جاهز للتثبيت (v1.1.0)
+
+            تم بناء هذا الإصدار تلقائياً عبر GitHub Actions من النسخة الأحدث.
+
             - **الحزمة:** `com.winfeen.dalel`
-            - **الإصدار:** من `pubspec.yaml` + رقم البناء
+            - **الإصدار:** `1.1.0+2` (من pubspec.yaml)
             - **Commit:** `${{ github.sha }}`
             - **Workflow run:** `${{ github.run_number }}`
-            - **التاريخ:** `${{ github.event.repository.updated_at }}`
-            
-            ### الملفات
-            - `app-release.apk` - نسخة الإصدار الرسمية
-            - `dalel-release.apk` - نفس الملف مع اسم مبسط
-            - `دليل-الدير.apk` - مع الاسم العربي
-            
-            ### التثبيت
-            حمّل الـ APK وثبّته مباشرة على جهاز Android (قد تحتاج للسماح بالتثبيت من مصادر غير معروفة).
-            
-            ### الميزات
+
+            ### 📦 الملفات المتاحة (اختر ما يناسبك)
+
+            | الملف | الوصف | الحجم التقريبي |
+            |---|---|---|
+            | `app-arm64-v8a-release.apk` / `dalel-arm64.apk` | **موصى به** - يدعم 64-bit فقط (arm64-v8a) - أصغر حجماً وأسرع | ~22-25 MB |
+            | `app-armeabi-v7a-release.apk` | للأجهزة القديمة 32-bit | ~21 MB |
+            | `app-x86_64-release.apk` | للمحاكيات وأجهزة x86_64 | ~23 MB |
+            | `app-release.apk` / `dalel-release.apk` | نسخة شاملة تدعم كل المعماريات | ~54 MB |
+            | `دليل-الدير.apk` | نفس الشاملة باسم عربي | ~54 MB |
+            | `دليل-الدير-arm64.apk` | نسخة 64-bit باسم عربي | ~22 MB |
+
+            ### 🚀 التثبيت
+            - للأجهزة الحديثة (2019+): حمّل `dalel-arm64.apk` (أصغر وأفضل)
+            - للأجهزة القديمة: حمّل `app-armeabi-v7a-release.apk`
+            - إذا لم تكن متأكداً: حمّل `app-release.apk` الشاملة
+
+            ### ✨ الجديد في v1.1.0
+            - إصلاح قراءة كل خدمات القسم (كان يقص عند 200)
+            - حد محلي جديد 5000 بدلاً من 200
+            - عرض طلبات بانتظار موافقة المدير
+            - تحسينات المزامنة (إزالة حاجز 10 دقائق)
+            - اختبارات جديدة
+
+            ### المميزات العامة
             - تصفح بدون إنترنت (SQLite محلي)
             - بحث وفلترة
             - لوحة تحكم المالك
             - دعم RTL كامل
           files: |
             build/app/outputs/flutter-apk/app-release.apk
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
+            build/app/outputs/flutter-apk/app-x86_64-release.apk
             dist/dalel-release.apk
+            dist/dalel-arm64.apk
           draft: false
           prerelease: false
           generate_release_notes: true

@@ -331,10 +331,44 @@ class DatabaseService {
   Future<void> saveCategories(List<Category> list) async {
     final d = await db;
     await d.transaction((txn) async {
+      // ── الحقول الديناميكية تُستبدل كاملةً في كل مزامنة ──
+      // بدون هذا: حقل أُضيف ثم أُزيل من لوحة الويب يبقى عالقاً
+      // في القاعدة المحلية ويظهر في نموذج إضافة خدمة بلا نهاية.
+      await txn.delete('category_field_options');
+      await txn.delete('category_fields');
       await txn.delete('categories');
       for (final c in list) {
         await txn.insert('categories', c.toJson(),
             conflictAlgorithm: ConflictAlgorithm.replace);
+        for (var fi = 0; fi < c.fields.length; fi++) {
+          final f = c.fields[fi];
+          final fid = f.id != 0 ? f.id : fi + 1;
+          await txn.insert('category_fields', {
+            'id': fid,
+            'category_id': c.id,
+            'field_key': f.key,
+            'label': f.label,
+            'type': f.type,
+            'required': f.required ? 1 : 0,
+            'placeholder': f.placeholder,
+            'help': f.help,
+            'show_in_card': f.showInCard ? 1 : 0,
+            'filterable': f.filterable ? 1 : 0,
+            'sort_order': f.sortOrder,
+            'is_active': 1,
+          });
+          for (var oi = 0; oi < f.options.length; oi++) {
+            final o = f.options[oi];
+            await txn.insert('category_field_options', {
+              'id': o.id != 0 ? o.id : fid * 1000 + oi + 1,
+              'field_id': fid,
+              'label': o.label,
+              'value': o.value,
+              'icon': o.icon,
+              'sort_order': oi,
+            });
+          }
+        }
       }
     });
   }

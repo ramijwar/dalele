@@ -723,6 +723,12 @@ class ServiceRequest {
   final String? rejectReason;
   final String? createdAt;
 
+  /// اسم صاحب الطلب (يأتي في مسار الإدارة admin/requests فقط)
+  final String? userName;
+
+  /// هل يريد صاحب الطلب إدارة الخدمة بعد نشرها؟
+  final bool wantToManage;
+
   ServiceRequest({
     required this.id,
     required this.name,
@@ -738,6 +744,8 @@ class ServiceRequest {
     this.status = 'pending',
     this.rejectReason,
     this.createdAt,
+    this.userName,
+    this.wantToManage = false,
   });
 
   factory ServiceRequest.fromJson(Map<String, dynamic> j) => ServiceRequest(
@@ -756,6 +764,9 @@ class ServiceRequest {
         status: _sn(j['status']) ?? 'pending',
         rejectReason: _sn(j['reject_reason'] ?? j['admin_note']),
         createdAt: _sn(j['created_at']),
+        userName: _sn(j['user_name']),
+        wantToManage: (j['want_to_manage'] ?? 0) == 1 ||
+            j['want_to_manage'] == true,
       );
 
   Map<String, dynamic> toJson() => {
@@ -773,6 +784,8 @@ class ServiceRequest {
         'status': status,
         'reject_reason': rejectReason,
         'created_at': createdAt,
+        'user_name': userName,
+        'want_to_manage': wantToManage ? 1 : 0,
       };
 
   String get statusLabel => switch (status) {

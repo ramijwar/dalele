@@ -1,6 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+import 'package:dalel/config/constants.dart';
 import 'package:dalel/models/models.dart';
 import 'package:dalel/services/database_service.dart';
 
@@ -221,5 +223,34 @@ void main() {
     expect(map.length, 2);
     expect(map[1]!.single.display, 'أطفال');
     expect(map[2]!.single.display, 'قلبية');
+  });
+
+  test('قراءة كل خدمات القسم من المحلي — بلا قصّ عند 200 (انحدار)', () async {
+    // الخطأ: الخادم يقص الصفحة إلى 200، و«servicesAll» طلبت 500 فرأت
+    // الصفحة الأولى (200) أخيرة فحفظت 200 فقط، ثم كان العرض المحلي
+    // يُقص هو الآخر بـ limit=200 — فتظهر ٢٠٠ من أصل ٢٤٢.
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+    DatabaseService.testPath = inMemoryDatabasePath;
+    addTearDown(() => DatabaseService.testPath = null);
+    final svc = DatabaseService.instance;
+    final d = await svc.db;
+
+    for (var i = 1; i <= 250; i++) {
+      await d.insert('services', {
+        'id': 1000 + i,
+        'name': 'صيدلية $i',
+        'category_id': 37,
+        'meta': '{}',
+      });
+    }
+
+    // بالحد الجديد: كل الصفوف تُقرأ من المحلي
+    final all = await svc.queryServices(categoryId: 37, limit: AppConfig.localQueryLimit);
+    expect(all.length, 250);
+
+    // وللتوثيق: الحد القديم (pageSize=200) كان يقص فعلاً
+    final capped = await svc.queryServices(categoryId: 37, limit: AppConfig.pageSize);
+    expect(capped.length, 200);
   });
 }

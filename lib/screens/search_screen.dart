@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../config/constants.dart';
 import '../config/theme.dart';
 import '../models/models.dart';
 import '../providers/app_provider.dart';
@@ -63,7 +64,7 @@ class _SearchScreenState extends State<SearchScreen> {
       search: q,
       categoryId: _categoryFilter,
       status: _statusFilter,
-      limit: 200,
+      limit: AppConfig.localQueryLimit,
     );
 
     if (!mounted) return;

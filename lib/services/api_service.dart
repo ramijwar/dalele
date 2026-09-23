@@ -171,9 +171,10 @@ class ApiService {
   /// ══════════════════════════════════════════════════════════
   /// جلب كل خدمات قسم (كل الصفحات)
   ///
-  /// قسم الصيدليات مثلاً فيه ٢٤٢ خدمة بينما pageSize = ٢٠٠،
-  /// فجلب صفحة واحدة يُسقط ٤٢ خدمة بصمت.
-  /// هذه الدالة تتابع الجلب حتى نفاد الصفحات.
+  /// الخادم يقص أي طلب إلى 200 صف كحد أقصى للصفحة (min(200, limit))،
+  /// فطلب 500 يعيد 200 فقط — وهذا جعل الشرط «length < pageSize»
+  /// يظن أن الصفحة الأولى هي الأخيرة ويُسقط الباقي بصمت (٢٤٢ ← ٢٠٠).
+  /// الحل: طلب 200 بالضبط فيتابع الترقيم حتى نفاد الصفحات فعلياً.
   /// ══════════════════════════════════════════════════════════
   Future<List<Service>> servicesAll({
     int? categoryId,
@@ -181,8 +182,8 @@ class ApiService {
     int? governorateId,
     int? specialtyId,
     String? status,
-    int pageSize = 500,
-    int maxPages = 20,
+    int pageSize = AppConfig.pageSize,
+    int maxPages = 50,
   }) async {
     final all = <Service>[];
     for (var page = 1; page <= maxPages; page++) {
@@ -280,6 +281,18 @@ class ApiService {
 
   Future<List<ServiceRequest>> myRequests() async {
     final r = await get('my/requests');
+    return (r['items'] as List? ?? [])
+        .map((e) => ServiceRequest.fromJson(e as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// ══════════════════════════════════════════════════════════
+  /// طلبات الإضافة المنتظرة موافقة الإدارة — للمدير فقط
+  /// في التطبيق تُعرض للتنبيه والاطلاع فقط؛ الموافقة نفسها
+  /// تتم من لوحة التحكم في تطبيق الويب.
+  /// ══════════════════════════════════════════════════════════
+  Future<List<ServiceRequest>> adminPendingRequests() async {
+    final r = await get('admin/requests', {'status': 'pending'});
     return (r['items'] as List? ?? [])
         .map((e) => ServiceRequest.fromJson(e as Map<String, dynamic>))
         .toList();

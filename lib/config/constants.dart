@@ -17,8 +17,12 @@ class AppConfig {
   /// مدة صلاحية الذاكرة المؤقتة قبل إعادة المزامنة (بالدقائق)
   static const int cacheTtlMinutes = 10;
 
-  /// عدد العناصر في كل صفحة
+  /// عدد العناصر في كل صفحة — مطابق لسقف الخادم (min(200, limit))
   static const int pageSize = 200;
+
+  /// حد قراءة الخدمات من القاعدة المحلية — يجب أن يتسع لكل خدمات
+  /// كل الأقسام مجتمعة (القراءة المحلية رخيصة ولا سبب لقصّها)
+  static const int localQueryLimit = 5000;
 
   /// مهلة الاتصال
   static const Duration connectTimeout = Duration(seconds: 20);

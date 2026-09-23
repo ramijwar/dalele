@@ -122,15 +122,14 @@ class AppProvider extends ChangeNotifier {
 
   /// ══════════════════════════════════════════════════════════
   /// المزامنة مع الخادم
+  ///
+  /// ملاحظة: أُزيل حاجز «الذاكرة المؤقتة ١٠ دقائق» — كان يجعل
+  /// تعديلات لوحة الويب (إضافة/إزالة حقول الأقسام مثلاً) لا تصل
+  /// للتطبيق إلا بعد انتهاء المهلة. نداء /meta رخيص ويتكرر عند
+  /// كل فتح للتطبيق دون كلفة تُذكر.
   /// ══════════════════════════════════════════════════════════
   Future<bool> sync({bool force = false}) async {
     if (_syncing) return false;
-
-    // تجنّب المزامنة المتكررة خلال مدة الذاكرة المؤقتة
-    if (!force && _lastSync != null) {
-      final diff = DateTime.now().difference(_lastSync!);
-      if (diff.inMinutes < AppConfig.cacheTtlMinutes) return true;
-    }
 
     _syncing = true;
     _error = null;
@@ -217,8 +216,8 @@ class AppProvider extends ChangeNotifier {
       }
     }
 
-    // الرجوع للبيانات المحلية
-    return _db.queryServices(categoryId: cat.id, limit: AppConfig.pageSize);
+    // الرجوع للبيانات المحلية — بحد يتسع لكل خدمات القسم (لا 200)
+    return _db.queryServices(categoryId: cat.id, limit: AppConfig.localQueryLimit);
   }
 
   Future<void> refreshSection(String slug) async {
