@@ -86,8 +86,10 @@ jobs:
           if [ -n "${{ inputs.release_tag }}" ]; then
             echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
           else
-            # read version from pubspec.yaml
-            VER=$(grep '^version:' pubspec.yaml | awk '{print $1}' | cut -d':' -f2 | tr -d ' ' | cut -d'+' -f1 || echo "1.0.0")
+            # read version from pubspec.yaml correctly
+            VER=$(grep '^version:' pubspec.yaml | sed -E 's/version:[[:space:]]*//' | cut -d'+' -f1 | tr -d ' ' | tr -d "'\"")
+            if [ -z "$VER" ]; then VER="1.0.0"; fi
+            echo "VER=$VER"
             echo "tag=v${VER}-${{ github.run_number }}" >> $GITHUB_OUTPUT
           fi
           echo "Tag determined"
