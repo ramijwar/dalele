@@ -59,31 +59,47 @@ jobs:
 
       # ── بناء APK العادي (universal) ──
       - name: Build APK universal release
-        run: flutter build apk --release --verbose
+        run: |
+          flutter build apk --release --verbose
+          mkdir -p /tmp/apk_backup
+          cp build/app/outputs/flutter-apk/app-release.apk /tmp/apk_backup/app-universal-release.apk
+          ls -lh /tmp/apk_backup/
 
       # ── بناء APK مقسمة حسب المعمارية (أصغر حجماً) ──
       - name: Build APK split per ABI (arm64, armv7, x64)
-        run: flutter build apk --release --split-per-abi --verbose
+        run: |
+          flutter build apk --release --split-per-abi --verbose
+          cp build/app/outputs/flutter-apk/app-*-release.apk /tmp/apk_backup/ || true
+          ls -lh build/app/outputs/flutter-apk/
+          ls -lh /tmp/apk_backup/
 
       # ── بناء نسخة 64-bit فقط (أصغر حجم ممكن) ──
       - name: Build APK arm64-v8a only (64-bit smallest)
-        run: flutter build apk --release --target-platform android-arm64 --verbose
+        run: |
+          flutter build apk --release --target-platform android-arm64 --verbose
+          # الآن app-release.apk هو arm64 فقط، نحتفظ بالنسخة الشاملة من الباك آب
+          cp /tmp/apk_backup/app-universal-release.apk build/app/outputs/flutter-apk/app-universal-release.apk || true
+          ls -lh build/app/outputs/flutter-apk/
+          ls -lh /tmp/apk_backup/
 
       - name: Prepare artifacts & list sizes
         run: |
           echo "=== APKs built ==="
           ls -lh build/app/outputs/flutter-apk/
+          ls -lh /tmp/apk_backup/
           echo ""
           mkdir -p dist
           # نسخ كل الـ APKs إلى dist
           cp build/app/outputs/flutter-apk/*.apk dist/ || true
+          cp /tmp/apk_backup/*.apk dist/ || true
           ls -lh dist/
           echo ""
           echo "=== Sizes ==="
-          du -h dist/*.apk
+          du -h dist/*.apk | sort -h
           # نسخ مع أسماء عربية ومبسطة
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk dist/dalel-arm64.apk || true
           cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk "dist/دليل-الدير-arm64.apk" || true
+          cp /tmp/apk_backup/app-universal-release.apk dist/dalel-universal.apk || true
           cp build/app/outputs/flutter-apk/app-release.apk dist/dalel-release.apk || true
           cp build/app/outputs/flutter-apk/app-release.apk "dist/دليل-الدير.apk" || true
           # معلومات البناء
@@ -170,8 +186,10 @@ jobs:
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
             build/app/outputs/flutter-apk/app-x86_64-release.apk
+            /tmp/apk_backup/app-universal-release.apk
             dist/dalel-release.apk
             dist/dalel-arm64.apk
+            dist/dalel-universal.apk
           draft: false
           prerelease: false
           generate_release_notes: true
