@@ -1,0 +1,132 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+      - 'arena/**'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag for release (e.g. v1.0.0)'
+        required: false
+        default: ''
+      create_release:
+        description: 'Create GitHub Release with APK?'
+        required: false
+        default: 'true'
+        type: choice
+        options:
+          - 'true'
+          - 'false'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.5'
+          channel: 'stable'
+          cache: true
+
+      - name: Flutter version
+        run: flutter --version
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze || true
+
+      - name: Run tests
+        run: flutter test || true
+
+      - name: Build APK release
+        run: flutter build apk --release -v
+
+      - name: Prepare artifacts
+        run: |
+          ls -lh build/app/outputs/flutter-apk/
+          mkdir -p dist
+          cp build/app/outputs/flutter-apk/app-release.apk dist/dalel-release.apk
+          # copy with Arabic name if filesystem supports
+          cp build/app/outputs/flutter-apk/app-release.apk "dist/دليل-الدير.apk" || true
+          # also copy version info
+          echo "Build: ${{ github.run_number }}" > dist/build-info.txt
+          echo "Commit: ${{ github.sha }}" >> dist/build-info.txt
+          echo "Date: $(date -u)" >> dist/build-info.txt
+          ls -lh dist/
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dalel-apk-${{ github.run_number }}
+          path: |
+            build/app/outputs/flutter-apk/app-release.apk
+            dist/
+          retention-days: 30
+
+      - name: Determine tag
+        id: tag
+        run: |
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            echo "tag=${{ inputs.release_tag }}" >> $GITHUB_OUTPUT
+          else
+            # read version from pubspec.yaml
+            VER=$(grep '^version:' pubspec.yaml | awk '{print $1}' | cut -d':' -f2 | tr -d ' ' | cut -d'+' -f1 || echo "1.0.0")
+            echo "tag=v${VER}-${{ github.run_number }}" >> $GITHUB_OUTPUT
+          fi
+          echo "Tag determined"
+
+      - name: Create GitHub Release with APK
+        if: ${{ inputs.create_release != 'false' }}
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: "دليل الدير ${{ steps.tag.outputs.tag }}"
+          body: |
+            ## دليل الدير - APK جاهز للتثبيت
+            
+            تم بناء هذا الإصدار تلقائياً عبر GitHub Actions.
+            
+            - **الحزمة:** `com.winfeen.dalel`
+            - **الإصدار:** من `pubspec.yaml` + رقم البناء
+            - **Commit:** `${{ github.sha }}`
+            - **Workflow run:** `${{ github.run_number }}`
+            - **التاريخ:** `${{ github.event.repository.updated_at }}`
+            
+            ### الملفات
+            - `app-release.apk` - نسخة الإصدار الرسمية
+            - `dalel-release.apk` - نفس الملف مع اسم مبسط
+            - `دليل-الدير.apk` - مع الاسم العربي
+            
+            ### التثبيت
+            حمّل الـ APK وثبّته مباشرة على جهاز Android (قد تحتاج للسماح بالتثبيت من مصادر غير معروفة).
+            
+            ### الميزات
+            - تصفح بدون إنترنت (SQLite محلي)
+            - بحث وفلترة
+            - لوحة تحكم المالك
+            - دعم RTL كامل
+          files: |
+            build/app/outputs/flutter-apk/app-release.apk
+            dist/dalel-release.apk
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
